@@ -1,5 +1,4 @@
-# final-project-luca-pierdicca
-Blooming cherry blossom
+# Blooming cherry blossom
 
 W,A,S,D 	- move the camera  
 Arrows 		- move the light  
