@@ -14,15 +14,15 @@ function initControls(sl, slt, c) {
       slt.position.z = Math.max(slt.position.z+=0.3,-20);
       break;
       case 32:
-      if(on){
+      if(spotLightOn){
         sl.intensity = 0;
         console.log('0')
-        on = false
+        spotLightOn = false
       }
       else{
         sl.intensity = 3;
         console.log('1')
-        on = true
+        spotLightOn = true
       }
       break;
       case 65:

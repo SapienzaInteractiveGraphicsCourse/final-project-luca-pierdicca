@@ -1,13 +1,12 @@
 // scene-------------------------------------------------------------------------
 let scene = new THREE.Scene();
-
+scene.fog = new THREE.Fog("rgb(250,250,204)", 30, 200);
 
 
 
 // renderer----------------------------------------------------------------------
-const renderer = new THREE.WebGLRenderer({ antialiasing: true });
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha:true });
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setClearColor("rgb(80,100,22)"); //80 100 22
 renderer.setPixelRatio(devicePixelRatio);
 document.body.appendChild(renderer.domElement);
 
@@ -24,7 +23,7 @@ let camera = initCamera()
 let lights = initLights()
 for(let l of lights)
     scene.add(l)
-let on = false
+let spotLightOn = false
 let spotLight = lights[1]
 let spotLightTarget = lights[2]
 
@@ -37,16 +36,9 @@ initControls(spotLight, spotLightTarget, camera)
 
 
 
-// background---------------------------------------------------------------------
-let background = initBackground()
-background[0].scale.set(20,20,20)
-background[0].position.set(0,20,-40)
-
-background[1].scale.set(0.3,110,0.3)
-background[1].position.set(0,-50,-40)
-
-for(let b of background)
-  scene.add(b)
+// sun--------------------------------------------------------------------------
+let sun = initSun();
+scene.add(sun);
 
 
 
@@ -64,7 +56,7 @@ scene.add(ground)
 let [tree, sinks, treeData] = initTree()
 scene.add(tree)
 
-let treeTimeline = gsap.timeline({defaults:{ease:Linear.easeNone, duration:0.05}})
+let treeTimeline = gsap.timeline({defaults:{ease:Linear.easeNone, duration:0.01}})
 
 for(let type in treeData){
   for(let axes of treeData[type]){
@@ -86,130 +78,141 @@ for(let type in treeData){
 
 
 
-
-
-
-
-
 // flowers-----------------------------------------------------------------------
-let grassGroup = []
-let grassTimelineGroup = []
-let grass = initFlower()
+let stemGroup = [];
+let stemGroupTimelines = [];
+let stem = initStem();
 
-function complete(g){
-
-  scene.attach(g.particles)
-  g.particles.updateMatrixWorld(true)
-  g.particles.geometry.applyMatrix4(g.particles.matrixWorld)
-  g.particles.position.set(0,0,0)
-  g.particles.rotation.set(0,0,0)
-  g.particles.scale.set(1,1,1)
-
-  g.bloomed=true
+function onComplete(s) {
+  scene.attach(s.particles);
+  s.particles.updateMatrixWorld(true);
+  s.particles.geometry.applyMatrix4(s.particles.matrixWorld);
+  s.particles.position.set(0, 0, 0);
+  s.particles.rotation.set(0, 0, 0);
+  s.particles.scale.set(1, 1, 1);
+  s.bloomed = true;
 }
 
-let grassClone
+let stemClone;
 
-for(let i=0;i<500;i++){
-  grassClone = THREE.SkeletonUtils.clone(grass) 
-  let d = r*Math.random()
-  let theta = 2*Math.PI*Math.random()
-  grassClone.skeleton.bones[0].position.x = d*Math.cos(theta)//-10+(20*Math.random())
-  grassClone.skeleton.bones[0].position.z = d*Math.sin(theta)//-10+(20*Math.random())
-  grassClone.skeleton.bones[0].rotation.y = Math.random()*2*Math.PI
-  //grassClone.skeleton.bones[0].position.x = 4
+for (let i = 0; i < 500; i++) {
+  stemClone = THREE.SkeletonUtils.clone(stem);
+  let d = (r - 2) * Math.random();
+  let theta = 2 * Math.PI * Math.random();
+  stemClone.skeleton.bones[0].position.x = d * Math.cos(theta);
+  stemClone.skeleton.bones[0].position.z = d * Math.sin(theta);
+  stemClone.skeleton.bones[0].rotation.y = Math.random() * 2 * Math.PI;
 
   //particles
-  let particles = initParticles()
-  grassClone.skeleton.bones[3].add(particles)
+  let particles = initParticles();
+  stemClone.skeleton.bones[3].add(particles); // add particles to the stem tip
 
-  let sinkmap = []
-  for(let p of particles.geometry.vertices){
-    [sinkIndex, sink] = sinks.sample()
-    sinkmap.push(sink.center)
+  let sinkmap = [];
+  for (let p of particles.geometry.vertices) {
+    let [sinkIndex, sink] = sinks.sample();
+    sinkmap.push(sink.center);
   }
 
-  
-  grassGroup.push({grassClone:grassClone,particles:particles,sinkmap:sinkmap,bloomed:false})
+  stemGroup.push({
+    stemClone: stemClone,
+    particles: particles,
+    sinkmap: sinkmap,
+    bloomed: false
+  });
 
-  let timeline = gsap.timeline({onComplete:complete, 
-                                onCompleteParams:[grassGroup[i]],
-                                paused:true})
-  let s = 0.2
-  timeline.to(grassClone.skeleton.bones[1].position,{y:0.4,duration:2*s,ease:Linear.easeNone},0)
-      .to(grassClone.skeleton.bones[2].position,{y:0.4,duration:2*s,ease:Linear.easeNone},1*s)
-      .to(grassClone.skeleton.bones[3].position,{y:0.4,duration:2*s,ease:Linear.easeOut},2*s)
-      //.to(grass.skeleton.bones[0].scale,{x:0.5,z:0.5,duration:8*s},0)
-      //.to(grass.skeleton.bones[1].scale,{x:1,z:1,duration:8*s},0)
-      //.to(grass.skeleton.bones[2].scale,{x:1,z:1,duration:8*s},0)
-      //.to(grass.skeleton.bones[3].scale,{x:1,z:1,duration:8*s},0)
-      .to(grassClone.skeleton.bones[1].rotation,{z:0.2,duration:2*s},2*s)
-      .to(grassClone.skeleton.bones[2].rotation,{z:0.2,duration:2*s},3*s)
-      .to(grassClone.skeleton.bones[3].children[0].material,{opacity:1.0, duration:1},2*s)
-  
-  grassTimelineGroup.push({tl:timeline, time:0})
+  let timeline = gsap.timeline({
+    onComplete: onComplete,
+    onCompleteParams: [stemGroup[i]],
+    paused: true
+  });
+  let scale = 0.2;
+  timeline
+    .to(
+      stemClone.skeleton.bones[1].position,
+      { y: 0.4, duration: 2 * scale, ease: Linear.easeNone },
+      0
+    )
+    .to(
+      stemClone.skeleton.bones[2].position,
+      { y: 0.4, duration: 2 * scale, ease: Linear.easeNone },
+      1 * scale
+    )
+    .to(
+      stemClone.skeleton.bones[3].position,
+      { y: 0.4, duration: 2 * scale, ease: Linear.easeOut },
+      2 * scale
+    )
+    .to(
+      stemClone.skeleton.bones[1].rotation,
+      { z: 0.2, duration: 2 * scale },
+      2 * scale
+    )
+    .to(
+      stemClone.skeleton.bones[2].rotation,
+      { z: 0.2, duration: 2 * scale },
+      3 * scale
+    )
+    .to(
+      stemClone.skeleton.bones[3].children[0].material,
+      { opacity: 1.0, duration: 1 },
+      2 * scale
+    );
 
-  scene.add(grassClone); 
+  stemGroupTimelines.push({ tl: timeline, time: 0 });
+
+  scene.add(stemClone);
 }
 
-
-// let helper2 = new THREE.SkeletonHelper(grassClone.skeleton.bones[0]);
-// helper2.material.linewidth = 3;
-// scene.add(helper2);
-
-
-
-
-
-
-
-
-
-
 // rendering--------------------------------------------------------------------------------------------------
-let spotDir = new THREE.Vector3()
-let grassDir = new THREE.Vector3()
-let p_vDir = new THREE.Vector3()
+let spotDir = new THREE.Vector3();
+let stemDir = new THREE.Vector3();
+let p_v = new THREE.Vector3(),
+  p_a = new THREE.Vector3(),
+  p_x = new THREE.Vector3();
+let delta_t = 0.05;
 
 function animate() {
-
-  //flower motion
-  spotDir.subVectors(spotLightTarget.position,lights[1].position).normalize()
-  for(let i=0;i<grassGroup.length;i++){
-    grassDir.subVectors(grassGroup[i].grassClone.skeleton.bones[0].position,lights[1].position).normalize()
-    if(Math.acos(grassDir.dot(spotDir))<=lights[1].angle && on){
-      grassTimelineGroup[i].time+=0.01
-      grassTimelineGroup[i].tl.time(grassTimelineGroup[i].time)
+  //flowers blooming (within spotlight cone)
+  spotDir.subVectors(spotLightTarget.position, lights[1].position).normalize();
+  for (let i = 0; i < stemGroup.length; i++) {
+    stemDir
+      .subVectors(
+        stemGroup[i].stemClone.skeleton.bones[0].position,
+        lights[1].position
+      )
+      .normalize();
+    if (Math.acos(stemDir.dot(spotDir)) <= lights[1].angle && spotLightOn) {
+      stemGroupTimelines[i].time += 0.01;
+      stemGroupTimelines[i].tl.time(stemGroupTimelines[i].time);
     }
   }
 
   //particles motion
-  for(let g of grassGroup){
-    if(g.bloomed){
-      for(let i=0;i<g.particles.geometry.vertices.length;i++){
-          
-        p_vDir.subVectors(g.sinkmap[i], g.particles.geometry.vertices[i]).normalize()
+  for (let s of stemGroup) {
+    if (s.bloomed) {
+      for (let i = 0; i < s.particles.geometry.vertices.length; i++) {
+        p_x = s.particles.geometry.vertices[i];
+        p_v = s.particles.geometry.velocities[i];
 
-        p_vDir.x += -15+(30*Math.random())
-        p_vDir.y += -5+(10*Math.random())
-        p_vDir.z += -15+(30*Math.random())
+        p_a.subVectors(s.sinkmap[i], p_x);
 
-        p_vDir.normalize()
-        p_vDir.multiplyScalar(0.25)
+        p_a.x += -30 + 60 * Math.random();
+        p_a.y += -30 + 60 * Math.random();
+        p_a.z += -30 + 60 * Math.random();
 
-        g.particles.geometry.vertices[i].add(p_vDir)
-        g.particles.geometry.verticesNeedUpdate = true
+        p_v.addVectors(p_v, p_a.multiplyScalar(delta_t));
+        p_x.addVectors(p_x, p_v.multiplyScalar(delta_t));
 
-      }      
+        s.particles.geometry.velocities[i] = p_v;
+        s.particles.geometry.vertices[i] = p_x;
+        s.particles.geometry.verticesNeedUpdate = true;
+      }
     }
   }
 
   renderer.render(scene, camera);
-  
+
   requestAnimationFrame(animate);
-  
 }
-
-
 
 animate();
